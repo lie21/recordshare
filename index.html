@@ -1,33 +1,41 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
+<head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity WebGL Player | Screenshoot and Share WebGL</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
+    <script>
+        HTMLCanvasElement.prototype.getContext = function (origFn) {
+            return function (type, attribs) {
+                attribs = attribs || {};
+                attribs.preserveDrawingBuffer = true;
+                return origFn.call(this, type, attribs);
+            };
+        }(HTMLCanvasElement.prototype.getContext);
+    </script>
     <!-- Include from the CDN -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.0.0-rc.5/dist/html2canvas.min.js"></script>
-  </head>
-  <body>
+</head>
+<body>
     <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=100% height=100%></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
+        <canvas id="unity-canvas" width=100% height=100%></canvas>
+        <div id="unity-loading-bar">
+            <div id="unity-logo"></div>
+            <div id="unity-progress-bar-empty">
+                <div id="unity-progress-bar-full"></div>
+            </div>
         </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <!-- <div id="unity-footer">
-        <div id="unity-webgl-logo"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">Screenshoot and Share WebGL</div>
-      </div> -->
+        <div id="unity-warning"> </div>
+        <!-- <div id="unity-footer">
+          <div id="unity-webgl-logo"></div>
+          <div id="unity-fullscreen-button"></div>
+          <div id="unity-build-title">Screenshoot and Share WebGL</div>
+        </div> -->
     </div>
     <div id="photo-output" style="width: 50vw; height: 50vh; position: absolute; display: none;"></div>
-    <video id="recording" style="width: 50vw; height: 50vh; position: absolute; display: none;" controls></video>
-    <canvas id="combinedCanvas" style="width: 100vw; height: 100vh; position: absolute; z-index: -10; display: none;"></canvas>
+    <video id="recording" style="width: 50vw; height: 50vh; position: absolute; display: none; transform: translate(50%, 10%);" controls></video>
     <script>
       var container = document.querySelector("#unity-container");
       var canvas = document.querySelector("#unity-canvas");
@@ -124,54 +132,98 @@
     </script>
 
     <script>
-      let photo = document.getElementById("photo-output");
-      var link = document.createElement("a");
-      var myBlob = new Blob();
-      var files;
-      var photoname = "PhotoName";
-      var photoCaption = "Beatiful Image";
-      var fileType;
+        let photo = document.getElementById("photo-output");
+        var link = document.createElement("a");
+        var myBlob = new Blob();
+        var files;
+        var photoname = "PhotoName";
+        var photoCaption = "Beatiful Image";
+        var videoName = "VideoName";
+        var videoCaption = "Video Caption";
+        var recordheight = 0;
 
-      //Take screenshot using html2canvas and save data to blob
-      function TakeShotJs() {
-          let div = document.body;
-          html2canvas(div, {
-              height: window.innerHeight,
-              allowTaint: true,
-              useCORS: true
-          }).then(
-              function (canvas) {
-                  canvas.toBlob(function (blob) {
-                      link.href = URL.createObjectURL(blob);
-                      console.log(blob);
-                      myBlob = blob;
-                  }, 'image/png');
-                  canvas.style.width = "100%";
-                  canvas.style.height = "100%";
-                  fileType = "image"
+        //Take screenshot using html2canvas and save data to blob
+        function TakeShotJs() {
+            let div = document.body;
+            html2canvas(div, {
+                height: window.innerHeight,
+                allowTaint: true,
+                useCORS: true
+            }).then(
+                function (canvas) {
+                    canvas.toBlob(function (blob) {
+                        link.href = URL.createObjectURL(blob);
+                        console.log(blob);
+                        myBlob = blob;
+                    }, 'image/png');
+                    canvas.style.width = "100%";
+                    canvas.style.height = "100%";
 
-                  photo.appendChild(canvas);
+                    photo.appendChild(canvas);
                 })
-      }
+        }
 
-      //Download image
-      function downloadImage() {
-          console.log(link.href);
-          link.download = photoname;
-          var event = document.createEvent("MouseEvents");
-          event.initMouseEvent("click");
-          link.dispatchEvent(event);
-          window.URL.revokeObjectURL(link.href);
-      }
-      
-      function closePreview() {
-          photo.style.display = "none";
-          if (photo.hasChildNodes()) {
-              photo.removeChild(photo.children[0]);
-          }
-      }
+        //Download image
+        function downloadImage() {
+            console.log(link.href);
+            link.download = photoname;
+            var event = document.createEvent("MouseEvents");
+            event.initMouseEvent("click");
+            link.dispatchEvent(event);
+            window.URL.revokeObjectURL(link.href);
+        }
 
-      //Video Recording
+        function closePreview() {
+            photo.style.display = "none";
+            if (photo.hasChildNodes()) {
+                photo.removeChild(photo.children[0]);
+            }
+            recording.style.display = "none";
+        }
+
+        async function shareMedia() {
+            //Creating an actual File
+            const namefile = myBlob.type.startsWith('image/') ? photoname : videoName;
+            const ext = myBlob.type.startsWith('image/') ? '.png' : '.mp4';
+            const capt = myBlob.type.startsWith('image/') ? photoCaption : videoCaption;
+            const file = new File([myBlob], namefile + ext, {
+                type: myBlob.type,
+            });
+
+            files = [file];
+            console.log(files);
+
+            //check file existension
+            if (files.length === 0) {
+                console.log("No files selected.");
+                return;
+            }
+
+            //check webshare API compability
+            console.log("Try to share");
+            if (!navigator.canShare) {
+                console.log("Your browser doesn't support the Web Share API.");
+                return;
+            }
+
+            //insert file properties and share
+            if (navigator.canShare({ files })) {
+                try {
+                    await navigator.share({
+                        files,
+                        title: namefile,
+                        text: capt,
+                    });
+                    console.log("shared");
+                } catch (error) {
+                    console.log(`Error: ${error.message}`);
+                }
+            } else {
+                console.log("Your system doesn't support sharing these files.");
+            }
+        }
+
+        //Video Recording
         let canvas1 = document.getElementById("video-canvas");
         let canvasUnity = document.getElementById("unity-canvas");
         let combinedCanvas = document.getElementById("combinedCanvas");
@@ -196,11 +248,20 @@
                 let recordedBlob = new Blob(data, { type: "video/mp4" });
                 recording.src = URL.createObjectURL(recordedBlob);
                 downloadButton.href = recording.src;
-                downloadButton.download = photoname+".mp4";
+                downloadButton.download = videoName + ".mp4";
                 console.log(`Successfully recorded ${recordedBlob.size} bytes of ${recordedBlob.type} media.`);
 
-                MyGameInstance.SendMessage('CaptureManager', 'ReadyVideo');
-                fileType = "video"
+                //Creating an actual File
+                myBlob = recordedBlob;
+                const file = new File([myBlob], 'video.mp4', {
+                    type: 'video/mp4',
+                });
+
+                files = [file];
+                console.log(files);
+                console.log(myBlob.type);
+                MyGameInstance.SendMessage('RecordManager', 'ReadyVideo');
+                recording.style.display = "block";
             };
         }
 
@@ -224,30 +285,28 @@
 
         const sourceCanvas = canvasUnity;
         const cropCanvas = document.createElement("canvas");
-        const cropHeight = window.innerHeight-200; // potong 50 px dari bawah
-        cropCanvas.width = window.innerWidth;
-        cropCanvas.height = cropHeight;
-
-        const ctx = cropCanvas.getContext("2d");
         
-        function combineCanvases() {           
+
+        function combineCanvases() {
+            const cropHeight = window.innerHeight - recordheight; // potong 50 px dari bawah
+            cropCanvas.width = window.innerWidth;
+            cropCanvas.height = cropHeight;
+            const ctx = cropCanvas.getContext("2d");
+            //console.log('recordheight = ' + recordheight);
+            //console.log('sourceheight = ' + window.innerHeight);
+            //console.log('cropHeight = ' + cropHeight);
             ctx.drawImage(
                 sourceCanvas, 0, 0, window.innerWidth, window.innerHeight
             );
             requestAnimationFrame(combineCanvases);
         }
-        // function combineAndRecord() {
-        //     combineCanvases();
-        //     let canvasStream = cropCanvas.captureStream(30); // Capture screen in 30 FPS
-        //     startRecording(canvasStream);
-        // }
-
         function combineAndRecord() {
-            let canvasStream = canvasUnity.captureStream(30); // Capture screen in 30 FPS
+            combineCanvases();
+            let canvasStream = cropCanvas.captureStream(30); // Capture screen in 30 FPS
             startRecording(canvasStream);
         }
-        
-        function stopVideo(){
+
+        function stopVideo() {
             stopRecording();
             console.log("Supposed to be stop video")
             // recording.style.display = "block";
@@ -256,79 +315,6 @@
             downloadButton.click();
         }
 
-        // async function shareMedia() {
-        //   if (files.length === 0) {
-        //     console.log("No files selected.");
-        //     return;
-        //   }
-        //   console.log("Try to share");
-        //     // feature detecting navigator.canShare() also implies
-        //     // the same for the navigator.share()
-        //     if (!navigator.canShare) {
-        //       //output.textContent = `Your browser doesn't support the Web Share API.`;
-        //       console.log("Your browser doesn't support the Web Share API.");
-        //       return;
-        //     }
-
-        //     if (navigator.canShare({ files })) {
-        //       try {
-        //         await navigator.share({
-        //           files,
-        //           title: photoname,
-        //           text: photoCaption,
-        //         });
-        //         //output.textContent = "Shared!";
-        //         console.log("Shared !");
-        //       } catch (error) {
-        //         //output.textContent = `Error: ${error.message}`;
-        //         console.log(`Error: ${error.message}`);
-        //       }
-        //     } else {
-        //       //output.textContent = `Your system doesn't support sharing these files.`;
-        //       console.log("Your system doesn't support sharing these files.");
-        //     }
-        //   }
-
-      async function shareMedia() {
-          //Creating an actual File
-          var filename = fileType === "image" ? photoname + '.png':photoname + '.mp4';
-          const file = new File([myBlob], filename, {
-            type: myBlob.type,
-          });
-
-          files = [file];
-          console.log(files);
-          
-          //check file existension
-          if (files.length === 0) {
-            console.log("No files selected.");
-            return;
-          }
-
-          //check webshare API compability
-          console.log("Try to share");
-            if (!navigator.canShare) {
-              console.log("Your browser doesn't support the Web Share API.");
-              return;
-            }
-
-            //insert file properties and share
-            if (navigator.canShare({ files })) {
-              try {
-                await navigator.share({
-                  files,
-                  title: photoname,
-                  text: photoCaption,
-                });
-                console.log("shared");
-              } catch (error) {
-                console.log(`Error: ${error.message}`);
-              }
-            } else {
-              console.log("Your system doesn't support sharing these files.");
-            }
-          }
-        
     </script>
-  </body>
+</body>
 </html>
